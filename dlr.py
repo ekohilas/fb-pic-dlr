@@ -4,6 +4,7 @@ import datetime
 import pyexiv2
 import datetime
 import urllib
+#import re
 
 def mfbLogin(username, password):
     # initiate
@@ -20,8 +21,10 @@ def mfbLogin(username, password):
 
 def scrapeMessages(filename):
     #with help from go|dfish from regex irc
-    soup = BeautifulSoup(open(filename))
     
+    print "Loading File into BSoup..."
+    soup = BeautifulSoup(open(filename))
+    print "File Loaded."
     a = []
 
     for div in soup.select('div.c'): #find all <div class="c"> tags
@@ -39,7 +42,9 @@ def scrapeMessages(filename):
         unixTime   = int(''.join(c for c in s if c.isdigit())) #find the section of numbers, which is our timestamp
         
         a.append((name, link, unixTime)) #append it to the array as a tuple
-
+        
+        print 'Loading... {}'.format(len(a)) #pretty loading formatting for debug
+        
     return a
 
 def setFilename(number, sender, foldername):
@@ -55,7 +60,9 @@ def getLink(pictureURL):
     html = driver.page_source #get the source
     
     soup = BeautifulSoup(html) #run it trhough bs
-    href = soup.find('a', 'bs bt by') #find the <a class="bs bt by">
+    href = soup.find('a', 'bq z br bw') #find the <a class="bs bt by"> tag, WARNING, can change
+    if href == None:
+        href = soup.find('a', 'bp z bq bv')
 
     link = str(href['href']) #take the href component from it (our link)
     return link
@@ -73,25 +80,57 @@ def setDate(filename, unixTime):
 def end():    
     driver.quit() #easy way to end
 
-
-
-def initiateDownload(start, foldername, username, password, sourceArray):
+def initiateDownload(continueNumber, countNumber, foldername, username, password, sourceArray):
+    print 'Logging in...'
     mfbLogin(username, password) #login
-    #because the program would sometimes halt halfway, I edited the loop to be able to retart from a certain step
-    for i in range(len(sourceArray)-start):
-        name, link, time = sourceArray[i+start] #unpack
-        filename = setFilename(i+1+start, name, foldername) #+1 means the images will start from 0001
+    #because the program would sometimes halt halfway, I edited the loop to be able to retart from a certain photo
+    for i in range(len(sourceArray)-continueNumber):
+        name, link, time = sourceArray[i+continueNumber] #unpack
+        filename = setFilename(i+1+continueNumber+countNumber, name, foldername) #+1 means the images will start from 0001
         downloadPicture(getLink(link), filename)
         setDate(filename, time)
-
+        print "Photo {0} of {1} downloaded.".format(i+1+continueNumber, len(sourceArray))
+        
     end()
 
-#create our array of values
-messageArray = scrapeMessages('file2.html')#+ scrapeMessages('file1.html')
+stringInput = str(raw_input("One line input, leave blank for line by line\nFileName1, FileName2, FolderName, Count from, Continue From, Username, Password\n: "))
+if stringInput == '':
+    
+    fileOne = str(raw_input('First html file: ')) + '.html'
+    fileTwo = str(raw_input('Second html file: ')) + '.html'
+    #create our array of values, first file, second file
+    arrayOne = scrapeMessages(fileOne)
+    arrayTwo = scrapeMessages(fileTwo)
+    messageArray = arrayOne + arrayTwo
+    print 'Total Images: ' + str(len(messageArray))
 
-foldername = str(raw_input('Foldername: '))
-start = int(raw_input('Start from: '))
-username = str(raw_input('Username: '))
-password = str(raw_input('Password: '))
+    foldername = str(raw_input('Foldername: '))
+    countStart = int(raw_input('Count from (Filename number start): '))
+    contNum    = int(raw_input('Continue from (Array count start, 0 if begining): '))
+    username   = str(raw_input('Username: '))
+    password   = str(raw_input('Password: '))
 
-initiateDownload(start, foldername, username, password, messageArray)
+else:
+    fileOne, fileTwo, foldername, countStart, contNum, username, password = stringInput.split(',')
+    fileOne = fileOne + '.html'
+    fileTwo = fileTwo + '.html'
+    countStart = int(countStart)
+    contNum = int(contNum)
+
+arrayOne = scrapeMessages(fileOne)
+arrayTwo = scrapeMessages(fileTwo)
+messageArray = arrayOne + arrayTwo
+
+print 'Total Images: ' + str(len(messageArray))
+
+initiateDownload(contNum, countStart, foldername, username, password, messageArray)
+print "Download Complete"
+
+'''  replacement module for when FB's class names aren't constant
+def getLinkRegex(pictureURL):
+    driver.get(pictureURL)
+    html = driver.page_source
+    regex = re.compile('<a href="(https://fbcdn-sphotos-h-a\.akamaihd\.net/[^"]*)')
+    rawphotolink = regex.findall(html)
+    return parseLink(rawphotolink[0])
+'''
